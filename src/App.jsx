@@ -262,25 +262,18 @@ export default function App() {
     return () => { clearTimeout(t1); clearTimeout(t2); };
   }, []);
 
-  // ページ背景は body 要素全体に適用（ノッチ周り・画面端でも柄や色が切れないように）
+  // 下地色を html / body に反映（上下に引っ張ったときや画面端でも白が見えないように）
+  // ※柄やグラデ本体は下の「背景レイヤー」divで描画する
+  //   （body への background-attachment: fixed は iOS Safari で効かないため）
   useEffect(() => {
-    const b = document.body.style;
-    b.background = "";
-    b.backgroundImage = "";
-    b.backgroundSize = "";
-    if (splash) { b.background = "#E4F0FB"; return; }
-    if (tab === "cal") {
-      b.background = "#F5FAFE";
-    } else if (tab === "body") {
-      b.background = "linear-gradient(180deg,#E3F1FC 0%,#F2F9FE 55%,#FDFEFF 100%)";
-      b.backgroundAttachment = "fixed";
-    } else if (tab === "prog") {
-      b.backgroundColor = "#F2F7FC";
-      b.backgroundImage = "radial-gradient(#D8E5F2 1.5px, transparent 1.5px)";
-      b.backgroundSize = "24px 24px";
-    } else {
-      b.background = "#EDF5FC";
-    }
+    const base = splash
+      ? "#E4F0FB"
+      : ({ log: "#EDF5FC", cal: "#F5FAFE", body: "#E3F1FC", prog: "#F2F7FC" }[tab] || "#EDF5FC");
+    document.documentElement.style.background = base;
+    document.body.style.background = base;
+    document.body.style.backgroundAttachment = "";
+    document.body.style.backgroundImage = "";
+    document.body.style.backgroundSize = "";
   }, [tab, splash]);
 
   // ─── 自分で追加した種目・削除した種目 ───
@@ -625,6 +618,14 @@ export default function App() {
         button:hover { filter: brightness(0.95); }
         button:active { transform: scale(0.92) !important; filter: brightness(0.9); }
       `}</style>
+
+      {/* 背景レイヤー：柄・グラデを画面全体に固定描画（iOSのbackground-attachment:fixedバグ回避）*/}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: -1, pointerEvents: "none",
+        ...(tab === "body"
+          ? { background: "linear-gradient(180deg,#E3F1FC 0%,#F2F9FE 55%,#FDFEFF 100%)" }
+          : tab === "prog"
+            ? { backgroundColor: "#F2F7FC", backgroundImage: "radial-gradient(#D8E5F2 1.5px, transparent 1.5px)", backgroundSize: "24px 24px" }
+            : { background: tab === "cal" ? "#F5FAFE" : "#EDF5FC" }) }} />
 
       {/* タイトル画面（アイコン中央＋アプリ名） */}
       {splash && (
