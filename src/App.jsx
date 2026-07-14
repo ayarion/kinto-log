@@ -244,6 +244,8 @@ export default function App() {
   const [prog, setProg]           = useState(() => load(LS.prog, INIT_PROG));
   const [progEx, setProgEx]       = useState("ベンチプレス");
   const [period, setPeriod]       = useState("all");  // グラフ期間: 1m / 3m / all
+  const [graphMode, setGraphMode] = useState("ex");   // グラフ種別: ex（種目）/ body（からだ）
+  const [bodyMetric, setBodyMetric] = useState("w");  // からだ指標: w（体重）/ fat（体脂肪率）/ mus（筋肉量）
   const now = new Date();
   const [calY, setCalY]           = useState(MOCK ? 2026 : now.getFullYear());
   const [calM, setCalM]           = useState(MOCK ? 3 : now.getMonth()); // モックは記録のある4月
@@ -293,7 +295,8 @@ export default function App() {
   const addCustomEx = () => {
     const name = newExName.trim();
     if (!name || !selMuscle) return;
-    if (exListOf(selMuscle).includes(name)) { setNewExName(""); setAddingEx(false); return; }
+    // 既にリストにある場合はその種目を選ぶだけ
+    if (exListOf(selMuscle).includes(name)) { setNewExName(""); setAddingEx(false); pickExercise(name); return; }
     if ((hiddenEx[selMuscle] || []).includes(name)) {
       // 一度削除した標準種目を復活
       setHiddenEx(h => ({ ...h, [selMuscle]: h[selMuscle].filter(x => x !== name) }));
@@ -302,6 +305,8 @@ export default function App() {
     }
     setNewExName("");
     setAddingEx(false);
+    // 追加した種目をそのまま選択し、セット入力パネルを開く（タップ数を減らす）
+    pickExercise(name);
   };
 
   // アプリ内製の確認ダイアログ
@@ -583,6 +588,19 @@ export default function App() {
 
   const bodyChart = bodyKeys.map(k => ({ date: fmtShort(k), w: body[k].w }));
 
+  // からだのグラフ用データ（選択中の指標を期間フィルタ）
+  const METRICS = [
+    { id: "w",   label: "体重",     unit: "kg" },
+    { id: "fat", label: "体脂肪率", unit: "%"  },
+    { id: "mus", label: "筋肉量",   unit: "kg" },
+  ];
+  const metricInfo = METRICS.find(m => m.id === bodyMetric) || METRICS[0];
+  const bodyAll = bodyKeys
+    .map(k => ({ k, date: fmtShort(k), v: body[k][bodyMetric] }))
+    .filter(s => typeof s.v === "number");
+  const bodyData = (cutoff ? bodyAll.filter(s => s.k >= cutoff) : bodyAll).map(({ date, v }) => ({ date, v }));
+  const bodyLatest = bodyData.length ? bodyData[bodyData.length - 1].v : 0;
+
   const card = { ...cardStyle(20), padding: "16px 18px", marginBottom: 12, position: "relative" };
   const delBtn = { position: "absolute", top: 10, right: 12, border: "none", background: "none", color: SUB, fontSize: 14, fontWeight: 700, cursor: "pointer", padding: "2px 4px", fontFamily: F };
   const sectionLabel = { fontSize: 11, fontWeight: 700, color: SUB, letterSpacing: 0.8, marginBottom: 6 };
@@ -664,9 +682,22 @@ export default function App() {
             <AppIcon size={50} />
           </div>
         )}
-        <div style={{ fontSize: 19, fontWeight: 800, color: TITLE, marginTop: 2, letterSpacing: 0.5 }}>
-          {tab === "log" ? "トレーニング記録" : tab === "cal" ? "履歴" : tab === "body" ? "からだの記録" : "成長グラフ"}
-        </div>
+        {tab === "prog" ? (
+          // 見出しタップで「種目のグラフ」⇔「からだのグラフ」を切り替え
+          <button onClick={() => { setGraphMode(m => (m === "ex" ? "body" : "ex")); }}
+            style={{ border: "none", background: "none", cursor: "pointer", fontFamily: F, display: "inline-flex", alignItems: "center", gap: 8, margin: "2px auto 0" }}>
+            <span style={{ fontSize: 19, fontWeight: 800, color: TITLE, letterSpacing: 0.5 }}>
+              {graphMode === "ex" ? "種目のグラフ" : "からだのグラフ"}
+            </span>
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 3, background: ACCL, color: ACC, borderRadius: 999, padding: "3px 9px", fontSize: 10.5, fontWeight: 800 }}>
+              ⇄ 切替
+            </span>
+          </button>
+        ) : (
+          <div style={{ fontSize: 19, fontWeight: 800, color: TITLE, marginTop: 2, letterSpacing: 0.5 }}>
+            {tab === "log" ? "トレーニング記録" : tab === "cal" ? "履歴" : tab === "body" ? "からだの記録" : "成長グラフ"}
+          </div>
+        )}
       </div>
 
       {/* Content */}
@@ -714,36 +745,36 @@ export default function App() {
               </div>
             </div>
 
-            {/* 前回のメニューからサッと記録（カード右上✕で種目削除・セットの✕で除外）*/}
+            {/* 前回のメニューからサッと記録（さらにコンパクト。カード右上✕で種目削除・セットの✕で除外）*/}
             {selMuscle && !selEx && recentMenus.length > 0 && (
-              <div style={{ padding: "12px 16px 0" }}>
+              <div style={{ padding: "10px 16px 0" }}>
                 <div style={sectionLabel}>前回のメニューからサッと記録</div>
                 {recentMenus.map(({ ex, last }) => {
                   const skip = quickSkip[ex] || [];
                   const useSets = last.sets.filter((_, i) => !skip.includes(i));
                   return (
-                    <div key={ex} style={{ ...card, padding: "10px 12px", marginBottom: 8 }}>
-                      <button onClick={() => deleteExercise(selMuscle, ex)} style={delBtn}>✕</button>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, paddingRight: 24 }}>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: TXT }}>{ex}</span>
-                        <span style={{ fontSize: 10, color: SUB, fontWeight: 700 }}>前回 {fmtShort(last.date)}</span>
+                    <div key={ex} style={{ ...card, padding: "7px 10px", marginBottom: 6 }}>
+                      <button onClick={() => deleteExercise(selMuscle, ex)} style={{ ...delBtn, top: 6, right: 8, fontSize: 12 }}>✕</button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4, paddingRight: 20 }}>
+                        <span style={{ fontSize: 12.5, fontWeight: 800, color: TXT }}>{ex}</span>
+                        <span style={{ fontSize: 9, color: SUB, fontWeight: 700 }}>前回 {fmtShort(last.date)}</span>
                       </div>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                         {last.sets.map((s, i) => skip.includes(i) ? null : (
-                          <span key={i} style={{ ...chipStyle, padding: "3px 9px", fontSize: 11, color: SUB, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 5 }}>
+                          <span key={i} style={{ ...chipStyle, padding: "2px 7px", fontSize: 10, color: SUB, fontWeight: 700, display: "inline-flex", alignItems: "center", gap: 4 }}>
                             {s.r}回{s.w > 0 ? ` · ${s.w}kg` : ""}
                             <span onClick={() => setQuickSkip(q => ({ ...q, [ex]: [...(q[ex] || []), i] }))}
                               style={{ cursor: "pointer", color: "#B6C6D6", fontWeight: 800 }}>✕</span>
                           </span>
                         ))}
                       </div>
-                      <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                      <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
                         <button onClick={() => quickSave(ex, useSets)} disabled={useSets.length === 0}
-                          style={{ background: ACCL, border: `1px solid #C9E5FB`, borderRadius: 999, color: ACC, cursor: "pointer", fontFamily: F, flex: 1, padding: "7px", fontSize: 12, fontWeight: 800, opacity: useSets.length === 0 ? 0.4 : 1 }}>
+                          style={{ background: ACCL, border: `1px solid #C9E5FB`, borderRadius: 999, color: ACC, cursor: "pointer", fontFamily: F, flex: 1, padding: "5px", fontSize: 11, fontWeight: 800, opacity: useSets.length === 0 ? 0.4 : 1 }}>
                           そのまま記録 ✓
                         </button>
                         <button onClick={() => pickExercise(ex)}
-                          style={{ ...cardStyle(999), flex: 1, padding: "7px", fontSize: 12, fontWeight: 800, color: ACC, cursor: "pointer", fontFamily: F }}>
+                          style={{ ...cardStyle(999), flex: 1, padding: "5px", fontSize: 11, fontWeight: 800, color: ACC, cursor: "pointer", fontFamily: F }}>
                           編集して記録
                         </button>
                       </div>
@@ -845,20 +876,7 @@ export default function App() {
               </div>
             )}
 
-            {/* Selected day's log */}
-            {history[selDate] && history[selDate].length > 0 && (
-              <div style={{ padding: "22px 16px 0" }}>
-                <div style={sectionLabel}>{isTodaySel ? "今日の記録" : `${selM}月${selD}日の記録`}</div>
-                {history[selDate].map((entry, i) => (
-                  <div key={i} style={card}>
-                    <button onClick={() => delEntry(selDate, i)} style={delBtn}>✕</button>
-                    <MuscleTag muscle={entry.muscle} />
-                    <div style={{ fontSize: 15, fontWeight: 700, color: TXT, marginBottom: 8 }}>{entry.ex}</div>
-                    <LogChips sets={entry.sets} />
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* 記録タブでは「今日の記録」一覧は表示しない（履歴タブで確認・削除できる）*/}
           </>
         )}
 
@@ -1091,6 +1109,10 @@ export default function App() {
         {/* ─── PROGRESS TAB ─── */}
         {tab === "prog" && (
           <>
+
+          {/* ===== 種目のグラフ ===== */}
+          {graphMode === "ex" && (
+          <>
             <div style={{ padding: "4px 16px 0" }}>
               <div style={sectionLabel}>種目を選ぶ</div>
               <div style={{ position: "relative" }}>
@@ -1194,6 +1216,101 @@ export default function App() {
                 );
               })}
             </div>
+          </>
+          )}
+
+          {/* ===== からだのグラフ ===== */}
+          {graphMode === "body" && (
+          <>
+            {/* 指標を選ぶ（体重／体脂肪率／筋肉量）*/}
+            <div style={{ padding: "4px 16px 0" }}>
+              <div style={sectionLabel}>指標を選ぶ</div>
+              <div style={{ position: "relative", background: "#F2F8FD", border: `1px solid ${LINE}`, borderRadius: 999, display: "flex", padding: 3 }}>
+                <div style={{ position: "absolute", top: 3, bottom: 3, left: 3, width: "calc((100% - 6px) / 3)", background: ACC, borderRadius: 999, boxShadow: "0 2px 6px rgba(42,163,247,0.4)", transform: `translateX(${METRICS.findIndex(m => m.id === bodyMetric) * 100}%)`, transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)" }} />
+                {METRICS.map(m => (
+                  <button key={m.id} onClick={() => setBodyMetric(m.id)}
+                    style={{ position: "relative", zIndex: 1, flex: 1, padding: "8px 0", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12.5, fontWeight: 800, fontFamily: F, color: bodyMetric === m.id ? "#fff" : SUB, background: "transparent", transition: "color 0.2s" }}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 最新値＋期間切替＋折れ線 */}
+            <div style={{ padding: "12px 16px 0" }}>
+              <div style={card}>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 14 }}>
+                  <span style={{ background: ACC, borderRadius: 999, padding: "5px 14px", fontSize: 12, fontWeight: 800, color: "#fff" }}>最新</span>
+                  <span style={{ fontSize: 32, fontWeight: 800, color: TXT }}>{bodyLatest}</span>
+                  <span style={{ fontSize: 15, color: SUB, fontWeight: 600 }}>{metricInfo.unit}</span>
+                </div>
+
+                {/* 期間切替（スライドするインジケーター）*/}
+                <div style={{ position: "relative", background: "#F2F8FD", border: `1px solid ${LINE}`, borderRadius: 999, display: "flex", padding: 3, marginBottom: 14 }}>
+                  <div style={{ position: "absolute", top: 3, bottom: 3, left: 3, width: "calc((100% - 6px) / 3)", background: ACC, borderRadius: 999, boxShadow: "0 2px 6px rgba(42,163,247,0.4)", transform: `translateX(${["1m","3m","all"].indexOf(period) * 100}%)`, transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)" }} />
+                  {[
+                    { id: "1m",  label: "1ヶ月" },
+                    { id: "3m",  label: "3ヶ月" },
+                    { id: "all", label: "全期間" },
+                  ].map(p => (
+                    <button key={p.id} onClick={() => setPeriod(p.id)}
+                      style={{ position: "relative", zIndex: 1, flex: 1, padding: "7px 0", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 800, fontFamily: F, color: period === p.id ? "#fff" : SUB, background: "transparent", transition: "color 0.2s" }}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+
+                {bodyData.length === 0 ? (
+                  <div style={{ height: 180, display: "flex", alignItems: "center", justifyContent: "center", color: SUB, fontSize: 13, fontWeight: 600, textAlign: "center", lineHeight: 1.6 }}>
+                    この期間の記録はありません<br />「からだ」タブで記録するとグラフになります
+                  </div>
+                ) : (() => {
+                  const chart = (
+                    <LineChart data={bodyData} margin={{ top: 5, right: 10, left: -24, bottom: 5 }} {...(MOCK ? { width: 322, height: 180 } : {})}>
+                      <CartesianGrid strokeDasharray="3 3" stroke={LINE} />
+                      <XAxis dataKey="date" tick={{ fontSize: 10, fill: SUB, fontFamily: F }} axisLine={false} tickLine={false} />
+                      <YAxis domain={["auto", "auto"]} tick={{ fontSize: 10, fill: SUB, fontFamily: F }} axisLine={false} tickLine={false} />
+                      <Tooltip
+                        contentStyle={{ borderRadius: 12, border: `1px solid ${LINE}`, fontFamily: F, fontSize: 13, background: CARD }}
+                        formatter={v => [`${v} ${metricInfo.unit}`, metricInfo.label]}
+                        labelStyle={{ color: SUB, fontWeight: 700 }}
+                      />
+                      <Line type="monotone" dataKey="v" stroke={ACC} strokeWidth={3} isAnimationActive={!MOCK}
+                        dot={{ fill: ACC, r: 5, strokeWidth: 2, stroke: "#fff" }}
+                        activeDot={{ r: 7, fill: ACC }} />
+                    </LineChart>
+                  );
+                  return (
+                    <div style={{ height: 180 }}>
+                      {MOCK ? chart : <ResponsiveContainer width="100%" height="100%">{chart}</ResponsiveContainer>}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* からだの記録履歴（選択中の指標を強調）*/}
+            <div style={{ padding: "4px 16px 0" }}>
+              <div style={sectionLabel}>記録の履歴</div>
+              {bodyKeys.length === 0 && (
+                <div style={{ ...cardStyle(16), padding: "14px 16px", textAlign: "center", color: SUB, fontSize: 13, fontWeight: 600 }}>
+                  まだ記録がありません
+                </div>
+              )}
+              {[...bodyKeys].reverse().map(k => {
+                const r = body[k];
+                return (
+                  <div key={k} style={{ ...cardStyle(16), padding: "12px 16px", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 13, color: SUB, fontWeight: 600 }}>{fmtShort(k)}</span>
+                    <span style={{ fontSize: 20, fontWeight: 800, color: TXT }}>
+                      {r[bodyMetric]} <span style={{ fontSize: 13, color: SUB, fontWeight: 600 }}>{metricInfo.unit}</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </>
+          )}
 
             {/* データのバックアップ（小さく・グラフの一番下）*/}
             <div style={{ padding: "16px 16px 0" }}>

@@ -2,7 +2,7 @@
 <html lang="ja">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Kinto-Log 筋トレ記録</title>
     <link rel="manifest" href="./manifest.webmanifest" />
     <meta name="theme-color" content="#3FA9F5" />
@@ -13,6 +13,11 @@
     <meta name="apple-mobile-web-app-title" content="Kinto-Log" />
   </head>
   <body style="margin:0;background:#EDF5FC">
+    <style>
+      /* ピンチズーム・ダブルタップズームの抑止（iOSでも効くように） */
+      html, body { touch-action: manipulation; -webkit-text-size-adjust: 100%; }
+      * { -webkit-touch-callout: none; }
+    </style>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
     <script>
@@ -21,6 +26,16 @@
           navigator.serviceWorker.register("./sw.js").catch(() => {});
         });
       }
+      // iOS Safari: 2本指ジェスチャによる拡大を抑止
+      document.addEventListener("gesturestart", (e) => e.preventDefault());
+      document.addEventListener("gesturechange", (e) => e.preventDefault());
+      // ダブルタップズーム抑止（300ms以内の連続タップをキャンセル）
+      let lastTouch = 0;
+      document.addEventListener("touchend", (e) => {
+        const now = Date.now();
+        if (now - lastTouch <= 300) e.preventDefault();
+        lastTouch = now;
+      }, { passive: false });
     </script>
   </body>
 </html>
