@@ -23,9 +23,19 @@
 - コンパイルエラーなし・コンソールエラーなし
 - テストで入れた種目/からだデータは掃除済み
 
-## 次
-- 本番ビルド → commit → push → GitHub Actionsデプロイ確認
+## 完了
+- commit 87a6a2d「記録UIの改善5点」→ origin/main へ push 済み
+- GitHub Actions デプロイ success（head_sha 87a6a2d）
+- 本番 https://ayarion.github.io/kinto-log/ で5点すべて再検証OK
+  - viewport: user-scalable=no, maximum-scale=1.0 反映
+  - 種目追加→即選択＋セット入力パネル展開
+  - 記録タブに「今日の記録」なし
+  - グラフ見出しタップで 種目のグラフ⇔からだのグラフ 切替／体重・体脂肪率・筋肉量・期間切替あり
+- 検証で入れたテスト種目Zは掃除済み
+
+すべて完了。
 
 ## 作業ログ
 
 - 着手。まず現状コード確認。
+- 5点実装・検証・commit・push・本番デプロイまで完了。再開時に本番で最終確認し全項目OKを確認。
