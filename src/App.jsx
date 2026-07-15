@@ -246,6 +246,8 @@ export default function App() {
   const [period, setPeriod]       = useState("all");  // グラフ期間: 1m / 3m / all
   const [graphMode, setGraphMode] = useState("ex");   // グラフ種別: ex（種目）/ body（からだ）
   const [bodyMetric, setBodyMetric] = useState("w");  // からだ指標: w（体重）/ fat（体脂肪率）/ mus（筋肉量）
+  const [celebrate, setCelebrate]   = useState(false); // 記録完了の中央ポップイン
+  const [justSavedEx, setJustSavedEx] = useState(null); // 「そのまま記録」直後のカード
   const now = new Date();
   const [calY, setCalY]           = useState(MOCK ? 2026 : now.getFullYear());
   const [calM, setCalM]           = useState(MOCK ? 3 : now.getMonth()); // モックは記録のある4月
@@ -488,12 +490,19 @@ export default function App() {
     }, 900);
   };
 
-  // 前回のメニューをワンタップでそのまま記録
+  // 前回のメニューをワンタップでそのまま記録（気持ちいい完了演出つき）
   const quickSave = (ex, sets) => {
+    if (justSavedEx || sets.length === 0) return; // 連打防止
     saveEntry(selMuscle, ex, sets.map(s => ({ ...s })));
-    setSelMuscle(null);
-    setSelEx(null);
-    setCurSets([]);
+    setJustSavedEx(ex);      // 押したボタンを「✓ 記録完了！」に
+    setCelebrate(true);       // 中央に✓をポンッ
+    setTimeout(() => setCelebrate(false), 1000);
+    setTimeout(() => {        // 演出を見せてから初期状態へ
+      setSelMuscle(null);
+      setSelEx(null);
+      setCurSets([]);
+      setJustSavedEx(null);
+    }, 950);
   };
 
   const onBodyPics = (e) => {
@@ -625,25 +634,41 @@ export default function App() {
   const [, selM, selD] = parseKey(selDate);
   const coach = tab === "prog" ? coachComment(progExSafe) : null;
 
-  // ページごとの背景は body 要素側で適用（上の useEffect）。ルートは透過
+  // ページごとの背景（ルートコンテナに直接適用＝iOSでも確実に表示。柄・グラデも scroll に追従）
+  const pageBg = tab === "body"
+    ? { background: "linear-gradient(180deg,#E3F1FC 0%,#F2F9FE 55%,#FDFEFF 100%)" }
+    : tab === "prog"
+      ? { backgroundColor: "#F2F7FC", backgroundImage: "radial-gradient(#D8E5F2 1.5px, transparent 1.5px)", backgroundSize: "24px 24px" }
+      : { background: tab === "cal" ? "#F5FAFE" : "#EDF5FC" };
 
   return (
-    <div style={{ fontFamily: F, minHeight: "100vh", display: "flex", flexDirection: "column", maxWidth: 500, margin: MOCK ? "0" : "0 auto", paddingTop: MOCK ? 0 : "calc(env(safe-area-inset-top) + 16px)" }}>
+    <div style={{ fontFamily: F, ...pageBg, minHeight: "100vh", display: "flex", flexDirection: "column", maxWidth: 500, margin: MOCK ? "0" : "0 auto", paddingTop: MOCK ? 0 : "calc(env(safe-area-inset-top) + 16px)" }}>
 
       {/* ボタンのホバー／クリックアニメーション */}
       <style>{`
         button { -webkit-tap-highlight-color: transparent; transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease; }
         button:hover { filter: brightness(0.95); }
         button:active { transform: scale(0.92) !important; filter: brightness(0.9); }
+        @keyframes kintoPop {
+          0%   { transform: scale(0.6); opacity: 0; }
+          28%  { transform: scale(1.08); opacity: 1; }
+          55%  { transform: scale(1); opacity: 1; }
+          80%  { transform: scale(1); opacity: 1; }
+          100% { transform: scale(1); opacity: 0; }
+        }
       `}</style>
 
-      {/* 背景レイヤー：柄・グラデを画面全体に固定描画（iOSのbackground-attachment:fixedバグ回避）*/}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, zIndex: -1, pointerEvents: "none",
-        ...(tab === "body"
-          ? { background: "linear-gradient(180deg,#E3F1FC 0%,#F2F9FE 55%,#FDFEFF 100%)" }
-          : tab === "prog"
-            ? { backgroundColor: "#F2F7FC", backgroundImage: "radial-gradient(#D8E5F2 1.5px, transparent 1.5px)", backgroundSize: "24px 24px" }
-            : { background: tab === "cal" ? "#F5FAFE" : "#EDF5FC" }) }} />
+      {/* 記録完了の中央ポップイン（操作をブロックしない）*/}
+      {celebrate && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none" }}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, animation: "kintoPop 1s ease-out forwards" }}>
+            <div style={{ width: 96, height: 96, borderRadius: "50%", background: GOOD, boxShadow: "0 10px 30px rgba(63,185,141,0.45)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <span style={{ fontSize: 52, color: "#fff", fontWeight: 900, lineHeight: 1 }}>✓</span>
+            </div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: GOOD, fontFamily: F, background: "rgba(255,255,255,0.92)", borderRadius: 999, padding: "5px 18px", boxShadow: "0 4px 14px rgba(120,160,200,0.2)" }}>記録完了！</div>
+          </div>
+        </div>
+      )}
 
       {/* タイトル画面（アイコン中央＋アプリ名） */}
       {splash && (
@@ -685,7 +710,11 @@ export default function App() {
         {tab === "prog" ? (
           // 見出しタップで「種目のグラフ」⇔「からだのグラフ」を切り替え
           <button onClick={() => { setGraphMode(m => (m === "ex" ? "body" : "ex")); }}
-            style={{ border: "none", background: "none", cursor: "pointer", fontFamily: F, display: "inline-flex", alignItems: "center", gap: 8, margin: "2px auto 0" }}>
+            style={{ border: "none", background: "none", cursor: "pointer", fontFamily: F, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, margin: "2px auto 0", width: "100%" }}>
+            {/* 左側の透明ダミー（右の切替バッジと同じ幅にして見出しを中央に）*/}
+            <span aria-hidden="true" style={{ display: "inline-flex", alignItems: "center", gap: 3, borderRadius: 999, padding: "3px 9px", fontSize: 10.5, fontWeight: 800, visibility: "hidden" }}>
+              ⇄ 切替
+            </span>
             <span style={{ fontSize: 19, fontWeight: 800, color: TITLE, letterSpacing: 0.5 }}>
               {graphMode === "ex" ? "種目のグラフ" : "からだのグラフ"}
             </span>
@@ -769,9 +798,9 @@ export default function App() {
                         ))}
                       </div>
                       <div style={{ display: "flex", gap: 5, marginTop: 6 }}>
-                        <button onClick={() => quickSave(ex, useSets)} disabled={useSets.length === 0}
-                          style={{ background: ACCL, border: `1px solid #C9E5FB`, borderRadius: 999, color: ACC, cursor: "pointer", fontFamily: F, flex: 1, padding: "5px", fontSize: 11, fontWeight: 800, opacity: useSets.length === 0 ? 0.4 : 1 }}>
-                          そのまま記録 ✓
+                        <button onClick={() => quickSave(ex, useSets)} disabled={useSets.length === 0 || justSavedEx === ex}
+                          style={{ ...(justSavedEx === ex ? { background: GOOD, border: `1px solid ${GOOD}`, color: "#fff" } : { background: ACCL, border: `1px solid #C9E5FB`, color: ACC }), borderRadius: 999, cursor: "pointer", fontFamily: F, flex: 1, padding: "5px", fontSize: 11, fontWeight: 800, opacity: useSets.length === 0 ? 0.4 : 1, transition: "background 0.2s" }}>
+                          {justSavedEx === ex ? "✓ 記録完了！" : "そのまま記録 ✓"}
                         </button>
                         <button onClick={() => pickExercise(ex)}
                           style={{ ...cardStyle(999), flex: 1, padding: "5px", fontSize: 11, fontWeight: 800, color: ACC, cursor: "pointer", fontFamily: F }}>
